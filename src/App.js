@@ -2,10 +2,12 @@ import { useState } from "react";
 import Signup from "./components/Signup";
 import Login from "./components/Login";
 import Mailbox from "./components/Mailbox";
+import MailComposer from "./components/MailComposer";
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showSignup, setShowSignup] = useState(false);
+  const [showComposer, setShowComposer] = useState(false); // toggle between mailbox & composer
 
   return (
     <div>
@@ -16,7 +18,13 @@ function App() {
           <Login onLoginSuccess={() => setIsLoggedIn(true)} />
         )
       ) : (
-        <Mailbox />
+        <div>
+          {showComposer ? (
+            <MailComposer onBack={() => setShowComposer(false)} />
+          ) : (
+            <Mailbox onComposeClick={() => setShowComposer(true)} />
+          )}
+        </div>
       )}
 
       {/* Toggle between Signup and Login */}
