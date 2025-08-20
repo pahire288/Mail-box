@@ -1,15 +1,13 @@
 import { useState } from "react";
-import Login from "./components/Login";
 import Signup from "./components/Signup";
-import Inbox from "./components/Inbox";
-import Sentbox from "./components/Sentbox";
+import Login from "./components/Login";
 import MailComposer from "./components/MailComposer";
+import Inbox from "./components/Inbox";  // ✅ Import
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showSignup, setShowSignup] = useState(false);
-  const [activePage, setActivePage] = useState("inbox");
-  const currentUser = { email: "test@gmail.com" }; // Replace with firebase auth user
+  const [userEmail, setUserEmail] = useState(""); // store logged in user
 
   return (
     <div>
@@ -17,31 +15,21 @@ function App() {
         showSignup ? (
           <Signup />
         ) : (
-          <Login onLoginSuccess={() => setIsLoggedIn(true)} />
+          <Login
+            onLoginSuccess={(email) => {
+              setIsLoggedIn(true);
+              setUserEmail(email); // ✅ Save email after login
+            }}
+          />
         )
       ) : (
         <div>
-          {/* Navigation */}
-          <nav className="d-flex gap-3 p-3 bg-light">
-            <button className="btn btn-outline-primary" onClick={() => setActivePage("inbox")}>
-              Inbox
-            </button>
-            <button className="btn btn-outline-primary" onClick={() => setActivePage("sent")}>
-              Sentbox
-            </button>
-            <button className="btn btn-outline-primary" onClick={() => setActivePage("compose")}>
-              Compose
-            </button>
-          </nav>
-
-          {/* Pages */}
-          {activePage === "inbox" && <Inbox currentUser={currentUser} />}
-          {activePage === "sent" && <Sentbox currentUser={currentUser} />}
-          {activePage === "compose" && <MailComposer sender={currentUser.email} />}
+          <MailComposer userEmail={userEmail} />
+          <Inbox userEmail={userEmail} /> {/* ✅ Show Inbox */}
         </div>
       )}
 
-      {/* Toggle Signup/Login */}
+      {/* Toggle Signup / Login */}
       <div className="text-center mt-3">
         {!isLoggedIn && (
           <button

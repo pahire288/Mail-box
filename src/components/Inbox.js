@@ -1,50 +1,86 @@
 import { useEffect, useState } from "react";
-import MailComposer from "./MailComposer";
 
-function Inbox({ currentUser }) {
+function Inbox({ userEmail }) {
   const [mails, setMails] = useState([]);
-  const [showComposer, setShowComposer] = useState(false);
+  const [selectedMail, setSelectedMail] = useState(null);
 
+  // ✅ Fetch mails from Firebase (only for this user)
   useEffect(() => {
-    // Replace with your Firebase Realtime DB URL
-    fetch("https://YOUR_PROJECT_ID.firebaseio.com/mails.json")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data) {
-          const loadedMails = Object.values(data).filter(
-            (mail) => mail.receiver === currentUser.email
-          );
-          setMails(loadedMails);
-        }
-      })
-      .catch((err) => console.error(err));
-  }, [currentUser.email]);
+    const fetchMails = async () => {
+      const res = await fetch("https://your-firebase-url/mails.json");
+      const data = await res.json();
+
+      if (data) {
+        const loadedMails = Object.keys(data).map((key) => ({
+          id: key,
+          ...data[key],
+        }));
+
+        // ✅ Filter only mails for this user
+        const userMails = loadedMails.filter(
+          (mail) => mail.receiver === userEmail
+        );
+
+        setMails(userMails);
+      }
+    };
+
+    fetchMails();
+  }, [userEmail]);
+
+  // ✅ Open mail + mark as read
+  const openMail = async (mail) => {
+    setSelectedMail(mail);
+
+    if (!mail.read) {
+      // Update in backend
+      await fetch(`https://your-firebase-url/mails/${mail.id}.json`, {
+        method: "PATCH",
+        body: JSON.stringify({ read: true }),
+        headers: { "Content-Type": "application/json" },
+      });
+
+      // Update in frontend state
+      setMails((prev) =>
+        prev.map((m) => (m.id === mail.id ? { ...m, read: true } : m))
+      );
+    }
+  };
 
   return (
-    <div className="container mt-4">
-      <h2>Inbox</h2>
-      <button
-        className="btn btn-primary mb-3"
-        onClick={() => setShowComposer(true)}
-      >
-        Compose
-      </button>
+    <div className="p-4">
+      <h2>Inbox ({mails.filter((mail) => !mail.read).length})</h2>
 
-      {showComposer && <MailComposer sender={currentUser.email} />}
+      {/* Inbox list */}
+      <div className="mail-list">
+        {mails.map((mail) => (
+          <div
+            key={mail.id}
+            onClick={() => openMail(mail)}
+            style={{
+              cursor: "pointer",
+              padding: "8px",
+              borderBottom: "1px solid #ddd",
+            }}
+          >
+            {!mail.read && (
+              <span style={{ color: "blue", marginRight: "8px" }}>●</span>
+            )}
+            <strong>{mail.subject}</strong> - {mail.sender}
+          </div>
+        ))}
+      </div>
 
-      <ul className="list-group">
-        {mails.length === 0 ? (
-          <li className="list-group-item">No mails received yet.</li>
-        ) : (
-          mails.map((mail, index) => (
-            <li key={index} className="list-group-item">
-              <strong>From:</strong> {mail.sender} <br />
-              <strong>Subject:</strong> {mail.subject} <br />
-              <p>{mail.body}</p>
-            </li>
-          ))
-        )}
-      </ul>
+      {/* Mail details */}
+      {selectedMail && (
+        <div className="mail-details mt-4 p-3 border rounded bg-light">
+          <h3>{selectedMail.subject}</h3>
+          <p>
+            <strong>From:</strong> {selectedMail.sender}
+          </p>
+          <p>{selectedMail.body}</p>
+        </div>
+      )}
     </div>
   );
 }
