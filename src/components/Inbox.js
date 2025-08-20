@@ -1,86 +1,54 @@
+// Inbox.js
 import { useEffect, useState } from "react";
+import { db } from "../firebase"; // your firebase config
+import { collection, getDocs, deleteDoc, doc } from "firebase/firestore";
 
 function Inbox({ userEmail }) {
   const [mails, setMails] = useState([]);
-  const [selectedMail, setSelectedMail] = useState(null);
 
-  // ✅ Fetch mails from Firebase (only for this user)
   useEffect(() => {
     const fetchMails = async () => {
-      const res = await fetch("https://your-firebase-url/mails.json");
-      const data = await res.json();
+      const querySnapshot = await getDocs(collection(db, "mails"));
+      const allMails = [];
+      querySnapshot.forEach((doc) => {
+        allMails.push({ id: doc.id, ...doc.data() });
+      });
 
-      if (data) {
-        const loadedMails = Object.keys(data).map((key) => ({
-          id: key,
-          ...data[key],
-        }));
-
-        // ✅ Filter only mails for this user
-        const userMails = loadedMails.filter(
-          (mail) => mail.receiver === userEmail
-        );
-
-        setMails(userMails);
-      }
+      // Only fetch mails where receiver matches logged-in user
+      setMails(allMails.filter((mail) => mail.receiver === userEmail));
     };
 
     fetchMails();
   }, [userEmail]);
 
-  // ✅ Open mail + mark as read
-  const openMail = async (mail) => {
-    setSelectedMail(mail);
-
-    if (!mail.read) {
-      // Update in backend
-      await fetch(`https://your-firebase-url/mails/${mail.id}.json`, {
-        method: "PATCH",
-        body: JSON.stringify({ read: true }),
-        headers: { "Content-Type": "application/json" },
-      });
-
-      // Update in frontend state
-      setMails((prev) =>
-        prev.map((m) => (m.id === mail.id ? { ...m, read: true } : m))
-      );
+  const handleDelete = async (id) => {
+    try {
+      await deleteDoc(doc(db, "mails", id));
+      setMails((prev) => prev.filter((mail) => mail.id !== id)); // update UI
+    } catch (err) {
+      console.error("Error deleting mail: ", err);
     }
   };
 
   return (
-    <div className="p-4">
-      <h2>Inbox ({mails.filter((mail) => !mail.read).length})</h2>
-
-      {/* Inbox list */}
-      <div className="mail-list">
-        {mails.map((mail) => (
-          <div
-            key={mail.id}
-            onClick={() => openMail(mail)}
-            style={{
-              cursor: "pointer",
-              padding: "8px",
-              borderBottom: "1px solid #ddd",
-            }}
-          >
-            {!mail.read && (
-              <span style={{ color: "blue", marginRight: "8px" }}>●</span>
-            )}
+    <div>
+      <h2>Inbox</h2>
+      {mails.map((mail) => (
+        <div
+          key={mail.id}
+          className="border p-2 flex justify-between items-center"
+        >
+          <div>
             <strong>{mail.subject}</strong> - {mail.sender}
           </div>
-        ))}
-      </div>
-
-      {/* Mail details */}
-      {selectedMail && (
-        <div className="mail-details mt-4 p-3 border rounded bg-light">
-          <h3>{selectedMail.subject}</h3>
-          <p>
-            <strong>From:</strong> {selectedMail.sender}
-          </p>
-          <p>{selectedMail.body}</p>
+          <button
+            onClick={() => handleDelete(mail.id)}
+            className="bg-red-500 text-white px-2 py-1 rounded"
+          >
+            Delete
+          </button>
         </div>
-      )}
+      ))}
     </div>
   );
 }
