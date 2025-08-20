@@ -1,59 +1,85 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import Inbox from "./Inbox";
+import { db } from "../firebase";
+import { collection, getDocs, deleteDoc } from "firebase/firestore";
 
-// Mock fetch globally
-beforeEach(() => {
-  global.fetch = jest.fn();
-});
+// Mock Firestore methods
+jest.mock("firebase/firestore", () => ({
+  collection: jest.fn(),
+  getDocs: jest.fn(),
+  deleteDoc: jest.fn(),
+  doc: jest.fn(),
+}));
 
-// 1. Renders Inbox title
-test("renders Inbox title", () => {
-  render(<Inbox currentUser={{ email: "test@gmail.com" }} />);
-  expect(screen.getByText(/Inbox/i)).toBeInTheDocument();
-});
+describe("Inbox Component - Delete Functionality", () => {
+  const mockMails = [
+    { id: "1", subject: "Hello", sender: "a@test.com", receiver: "user@test.com" },
+    { id: "2", subject: "React Testing", sender: "b@test.com", receiver: "user@test.com" },
+  ];
 
-// 2. Shows 'No mails received yet' when inbox is empty
-test("shows empty state when no mails are received", async () => {
-  global.fetch.mockResolvedValueOnce({
-    json: async () => null,
+  beforeEach(() => {
+    jest.clearAllMocks();
   });
 
-  render(<Inbox currentUser={{ email: "test@gmail.com" }} />);
-  expect(await screen.findByText(/No mails received yet/i)).toBeInTheDocument();
-});
+  test("should render mails for logged-in user", async () => {
+    getDocs.mockResolvedValue({
+      forEach: (cb) => mockMails.forEach((mail) => cb({ id: mail.id, data: () => mail })),
+    });
 
-// 3. Displays received mails correctly
-test("displays mails for the current user", async () => {
-  const mockMails = {
-    m1: { sender: "alice@gmail.com", receiver: "test@gmail.com", subject: "Hello", body: "Hi there!" },
-    m2: { sender: "bob@gmail.com", receiver: "other@gmail.com", subject: "Ignore", body: "Not for you" }
-  };
+    render(<Inbox userEmail="user@test.com" />);
 
-  global.fetch.mockResolvedValueOnce({
-    json: async () => mockMails,
+    expect(await screen.findByText(/Hello/)).toBeInTheDocument();
+    expect(await screen.findByText(/React Testing/)).toBeInTheDocument();
   });
 
-  render(<Inbox currentUser={{ email: "test@gmail.com" }} />);
-  
-  expect(await screen.findByText(/From: alice@gmail.com/i)).toBeInTheDocument();
-  expect(screen.getByText(/Subject: Hello/i)).toBeInTheDocument();
-  expect(screen.queryByText(/From: bob@gmail.com/i)).not.toBeInTheDocument();
-});
+  test("should delete a mail when Delete button is clicked", async () => {
+    getDocs.mockResolvedValue({
+      forEach: (cb) => mockMails.forEach((mail) => cb({ id: mail.id, data: () => mail })),
+    });
 
-// 4. Opens MailComposer on Compose button click
-test("opens MailComposer when compose button is clicked", () => {
-  render(<Inbox currentUser={{ email: "test@gmail.com" }} />);
-  
-  fireEvent.click(screen.getByText(/Compose/i));
-  
-  expect(screen.getByText(/Send Mail/i)).toBeInTheDocument();
-});
+    render(<Inbox userEmail="user@test.com" />);
 
-// 5. Handles fetch error gracefully
-test("handles fetch error gracefully", async () => {
-  global.fetch.mockRejectedValueOnce("API failure");
+    const deleteButtons = await screen.findAllByText(/Delete/);
+    fireEvent.click(deleteButtons[0]);
 
-  render(<Inbox currentUser={{ email: "test@gmail.com" }} />);
-  
-  expect(screen.getByText(/Inbox/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(deleteDoc).toHaveBeenCalled();
+    });
+  });
+
+  test("should remove deleted mail from the UI", async () => {
+    getDocs.mockResolvedValue({
+      forEach: (cb) => mockMails.forEach((mail) => cb({ id: mail.id, data: () => mail })),
+    });
+
+    render(<Inbox userEmail="user@test.com" />);
+
+    const firstMail = await screen.findByText(/Hello/);
+    const deleteButtons = await screen.findAllByText(/Delete/);
+
+    fireEvent.click(deleteButtons[0]);
+
+    await waitFor(() => {
+      expect(firstMail).not.toBeInTheDocument();
+    });
+  });
+
+  test("should handle delete error gracefully", async () => {
+    console.error = jest.fn(); // suppress error log in test output
+
+    getDocs.mockResolvedValue({
+      forEach: (cb) => mockMails.forEach((mail) => cb({ id: mail.id, data: () => mail })),
+    });
+
+    deleteDoc.mockRejectedValueOnce(new Error("Delete failed"));
+
+    render(<Inbox userEmail="user@test.com" />);
+
+    const deleteButtons = await screen.findAllByText(/Delete/);
+    fireEvent.click(deleteButtons[0]);
+
+    await waitFor(() => {
+      expect(console.error).toHaveBeenCalledWith("Error deleting mail: ", expect.any(Error));
+    });
+  });
 });
